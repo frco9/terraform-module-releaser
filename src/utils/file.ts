@@ -130,8 +130,8 @@ export function findTerraformModuleDirectories(workspaceDir: string, modulePathI
  *                          if no directory is found.
  */
 export function getRelativeTerraformModulePathFromFilePath(filePath: string): string | null {
-  const rootDir = resolve(context.workspaceDir);
-  const absoluteFilePath = isAbsolute(filePath) ? filePath : resolve(context.workspaceDir, filePath); // Handle relative/absolute
+  const rootDir = resolve(context.workingDir);
+  const absoluteFilePath = isAbsolute(filePath) ? filePath : resolve(context.workingDir, filePath); // Handle relative/absolute
   let directory = dirname(absoluteFilePath);
 
   // Traverse upward until the current working directory (rootDir) is reached

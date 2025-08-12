@@ -32,6 +32,7 @@ const defaultContext: Context = {
   prBody: 'This is a test pull request body.',
   issueNumber: 1,
   workspaceDir: process.cwd(),
+  workingDir: process.cwd(),
   isPrMergeEvent: false,
 };
 
@@ -47,6 +48,7 @@ const validContextKeys = [
   'prBody',
   'issueNumber',
   'workspaceDir',
+  'workingDir',
   'isPrMergeEvent',
 ] as const;
 

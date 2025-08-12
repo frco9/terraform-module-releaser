@@ -38,9 +38,9 @@ export function parseTerraformModules(
   //
   // Phase 1: Find all module directories
   //
-  const workspaceDir = context.workspaceDir;
-  info(`Searching for Terraform modules in ${workspaceDir}`);
-  const moduleDirectories = findTerraformModuleDirectories(workspaceDir, config.modulePathIgnore);
+  const workingDir = context.workingDir;
+  info(`Searching for Terraform modules in ${workingDir}`);
+  const moduleDirectories = findTerraformModuleDirectories(workingDir, config.modulePathIgnore);
   info(
     `Found ${moduleDirectories.length} Terraform module ${moduleDirectories.length === 1 ? 'directory' : 'directories'}:`,
   );

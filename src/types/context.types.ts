@@ -51,6 +51,11 @@ export interface Context {
   workspaceDir: string;
 
   /**
+   * The working directory where modules needs to be find.
+   */
+  workingDir: string;
+
+  /**
    * Flag to indicate if the current event is a pull request merge event.
    */
   isPrMergeEvent: boolean;

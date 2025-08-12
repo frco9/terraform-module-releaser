@@ -1,8 +1,8 @@
 import type { OctokitRestApi } from '@/types';
 import { trimSlashes } from '@/utils/string';
 import { paginateRest } from '@octokit/plugin-paginate-rest';
-import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
+import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
 import type { EndpointOptions, OctokitResponse } from '@octokit/types';
 import { vi } from 'vitest';
 
@@ -358,7 +358,7 @@ export async function createRealOctokit(): Promise<OctokitRestApi> {
   const OctokitWithPaginateAndRest = realOctokit.Octokit.plugin(restEndpointMethods, paginateRest);
 
   return new OctokitWithPaginateAndRest({
-    auth: `token ${process.env.GITHUB_TOKEN}`,
+    auth: `Bearer ${process.env.GITHUB_TOKEN}`,
     userAgent: '[octokit] terraform-module-releaser-ci-test',
   });
 }

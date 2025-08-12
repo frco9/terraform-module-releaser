@@ -44,7 +44,7 @@ export class TerraformModule {
 
     // Handle modules outside workspace directory (primarily for testing scenarios)
     // Falls back to directory name when relative path contains '../'
-    const relativePath = relative(context.workspaceDir, directory);
+    const relativePath = relative(context.workingDir, directory);
 
     // If relative path starts with '../', the module is outside the workspace directory
     // Fall back to using the directory name directly to avoid invalid module names

@@ -126,7 +126,7 @@ function initializeContext(): Context {
       repoUrl: `${serverUrl}/${owner}/${repo}`,
       octokit: new OctokitRestApi({
         baseUrl: apiUrl,
-        auth: `token ${config.githubToken}`,
+        auth: `Bearer ${config.githubToken}`,
         userAgent: `[octokit] terraform-module-releaser/${version} (${homepage})`,
       }),
       prNumber: payload.pull_request.number,
@@ -134,6 +134,7 @@ function initializeContext(): Context {
       prBody: payload.pull_request.body ?? '',
       issueNumber: payload.pull_request.number,
       workspaceDir,
+      workingDir: workspaceDir, //`${workspaceDir}${config.workingDirectory?.trim() ? `/${config.workingDirectory}` : ''}`,
       isPrMergeEvent: payload.action === 'closed' && payload.pull_request.merged === true,
     };
 
