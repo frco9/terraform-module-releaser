@@ -24,7 +24,7 @@ describe('TerraformModule', () => {
     writeFileSync(join(moduleDir, 'main.tf'), 'resource "aws_s3_bucket" "test" { bucket = "test-bucket" }');
 
     context.set({
-      workspaceDir: tmpDir,
+      workingDir: tmpDir,
     });
 
     config.set({
@@ -80,7 +80,7 @@ describe('TerraformModule', () => {
 
     it('should handle module directory outside workspace directory', () => {
       context.set({
-        workspaceDir: '/invalid/root/external',
+        workingDir: '/invalid/root/external',
       });
 
       const moduleDir = join(tmpDir, 'aws/s3-bucket');

@@ -507,15 +507,15 @@ describe('utils/file', () => {
   });
 
   describe('getRelativeTerraformModulePathFromFilePath()', () => {
-    // const originalWorkspaceDir = context.workspaceDir;
+    // const originalWorkingDir = context.workingDir;
 
     beforeEach(() => {
-      context.workspaceDir = tmpDir; // Set workspaceDir to tmpDir for tests
+      context.workingDir = tmpDir; // Set workingDir to tmpDir for tests
     });
 
     afterEach(() => {
       // Restore original context
-      //context.workspaceDir = originalWorkspaceDir;
+      //context.workingDir = originalWorkingDir;
     });
 
     it('should return relative path for file in terraform module directory', () => {

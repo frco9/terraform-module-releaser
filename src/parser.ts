@@ -42,7 +42,9 @@ export function parseTerraformModules(
   info(`Searching for Terraform modules in ${workingDir}`);
   const moduleDirectories = findTerraformModuleDirectories(workingDir, config.modulePathIgnore);
   info(
-    `Found ${moduleDirectories.length} Terraform module ${moduleDirectories.length === 1 ? 'directory' : 'directories'}:`,
+    `Found ${moduleDirectories.length} Terraform module ${
+      moduleDirectories.length === 1 ? 'directory' : 'directories'
+    }:`,
   );
   info(JSON.stringify(moduleDirectories, null, 2));
 
@@ -51,9 +53,14 @@ export function parseTerraformModules(
   //
   info('Creating TerraformModule instances for each module directory...');
   const terraformModulesMap: Record<string, TerraformModule> = {};
+  const terraformNestedModulesMap: Record<string, string[]> = {};
   for (const directory of moduleDirectories) {
     const module = new TerraformModule(directory);
     terraformModulesMap[module.name] = module;
+    for (const nestedModule of Object.values(module.nestedModules)) {
+      terraformNestedModulesMap[nestedModule] ??= [];
+      terraformNestedModulesMap[nestedModule].push(module.name);
+    }
   }
 
   //
@@ -69,7 +76,6 @@ export function parseTerraformModules(
 
     for (const relativeFilePath of files) {
       const relativeModulePath = getRelativeTerraformModulePathFromFilePath(relativeFilePath);
-
       if (relativeModulePath === null) {
         // File isn't associated with a Terraform module - continue to next file.
         info(`✗ Skipping file "${relativeFilePath}" ➜  No associated Terraform module`);
@@ -78,6 +84,37 @@ export function parseTerraformModules(
 
       const moduleName = TerraformModule.getTerraformModuleNameFromRelativePath(relativeModulePath);
       const module = terraformModulesMap[moduleName];
+
+      // We check if this module is a nestedModule
+      if (!module) {
+        for (const parentModulePath of terraformNestedModulesMap[moduleName] ?? []) {
+          info(`✓ Found files from parent module "${parentModulePath}" in module "${moduleName}"`);
+          const parentModuleName = TerraformModule.getTerraformModuleNameFromRelativePath(parentModulePath);
+          const parentModule = terraformModulesMap[parentModuleName];
+
+          if (!parentModule) {
+            info(
+              `✗ Skipping file "${parentModulePath}" ➜  No associated active Terraform module "${parentModuleName}" (Likely due to module ignoring).`,
+            );
+            continue;
+          }
+
+          const relativeModuleFilePath = relativeFilePath.replace(`${relativeModulePath}/`, '');
+          const excludeResult = shouldExcludeFile(relativeModuleFilePath, config.moduleChangeExcludePatterns);
+          if (excludeResult.shouldExclude) {
+            info(
+              `✗ Skipping file "${relativeFilePath}" ➜  Excluded by via module-change-exclude-pattern "${excludeResult.matchedPattern}"`,
+            );
+            continue;
+          }
+
+          // Mark this module as having at least one non-excluded file
+          modulesToCommitMap.set(parentModuleName, true);
+          info(
+            `✓ Found changed file "${relativeFilePath}" in module "${moduleName}" linked to parent module "${parentModuleName}"`,
+          );
+        }
+      }
 
       // If the module is not found in the map, it means the file's path does not correspond to any known
       // Terraform module directory. This can happen if the module was deleted, renamed, or excluded via the

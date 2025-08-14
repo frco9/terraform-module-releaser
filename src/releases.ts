@@ -8,7 +8,7 @@ import { context } from '@/context';
 import { TerraformModule } from '@/terraform-module';
 import type { GitHubRelease } from '@/types';
 import { GITHUB_ACTIONS_BOT_NAME } from '@/utils/constants';
-import { copyModuleContents } from '@/utils/file';
+import { copyModuleContents, copyNestedModules, updateNestedModuleSourcePaths } from '@/utils/file';
 import { getGitHubActionsBotEmail } from '@/utils/github';
 import { debug, endGroup, info, startGroup } from '@actions/core';
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
@@ -111,6 +111,7 @@ export async function createTaggedReleases(terraformModules: TerraformModule[]):
     prBody,
     prTitle,
     workspaceDir,
+    workingDir,
   } = context;
 
   console.time('Elapsed time pushing new tags & release');
@@ -134,8 +135,16 @@ export async function createTaggedReleases(terraformModules: TerraformModule[]):
       // Copy the module's contents to the temporary directory, excluding specified patterns
       copyModuleContents(module.directory, tmpDir, config.moduleAssetExcludePatterns);
 
+      // Update module's nested modules source to use proper relative path
+      updateNestedModuleSourcePaths(module.nestedModules, tmpDir);
+
+      // Copy the module's nested module dependencies
+      copyNestedModules(module.nestedModules, tmpDir, workingDir, config.moduleAssetExcludePatterns);
+
       // Copy the module's .git directory
-      cpSync(join(workspaceDir, '.git'), join(tmpDir, '.git'), { recursive: true });
+      cpSync(join(workspaceDir, '.git'), join(tmpDir, '.git'), {
+        recursive: true,
+      });
 
       // Git operations: commit the changes and tag the release
       const commitMessage = `${module.getReleaseTag()}\n\n${prTitle}\n\n${prBody}`.trim();
@@ -203,7 +212,9 @@ export async function createTaggedReleases(terraformModules: TerraformModule[]):
       );
     }
 
-    throw new Error(`Failed to create tags in repository: ${errorMessage}`, { cause: error });
+    throw new Error(`Failed to create tags in repository: ${errorMessage}`, {
+      cause: error,
+    });
 
     //
     // There appears to be an issue with V8 coverage reporting. It shows the finally block as

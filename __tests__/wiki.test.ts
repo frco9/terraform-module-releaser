@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptions } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -30,6 +30,7 @@ describe('wiki', async () => {
 
   // Grab the original set of modules by moving the workspaceDir to tf-modules
   context.workspaceDir = join(process.cwd(), '/tf-modules');
+  context.workingDir = context.workspaceDir;
 
   // Configure to include all modules by setting modulePathIgnore to empty
   config.set({

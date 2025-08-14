@@ -1,7 +1,17 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { context } from '@/context';
 import { info } from '@actions/core';
+import { glob } from 'glob';
 import { minimatch } from 'minimatch';
 
 /**
@@ -120,6 +130,110 @@ export function findTerraformModuleDirectories(workspaceDir: string, modulePathI
 }
 
 /**
+ * Recursively finds Terraform nested module used by the module defined in moduleDirectory.
+ *
+ * This function check the module directory files to find nested module declaration.
+ * It then compute the relative path for this nested module relatively to the current
+ * one.
+ *
+ * @param workingDir - The current directory to start searching from
+ * @param moduleDirectory - The module directory
+ * @returns {Record<string, string>} An object of nested modules. The key is the relative path
+ *                                   and the value is the exsting relative path.
+ */
+export function findModuleNestedModules(workingDir: string, moduleDirectory: string): Record<string, string> {
+  const nestedModules: Record<string, string> = {};
+
+  const searchModuleFiles = (dir: string): void => {
+    const tfFiles = glob.sync(`${dir}/**/*.tf`, {
+      cwd: workingDir,
+      absolute: false,
+    });
+
+    for (const tfFile of tfFiles) {
+      try {
+        let content = readFileSync(join(workingDir, tfFile), 'utf8');
+
+        // We clean first comment to not capture their content
+        // Line comments
+        content = content.replace(/#.*/g, '');
+        content = content.replace(/\/\/.*/g, '');
+        // Block comments
+        content = content.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // Regex to detect module blocks with local source paths
+        const moduleRegex = /module\s+"[^"]+"\s*\{[^}]*source\s*=\s*"(\.\/[^"]+|\.\.\/[^"]+)"/gs;
+        const matches = content.matchAll(moduleRegex);
+
+        for (const match of matches) {
+          const sourcePath = match[1];
+
+          // Resolve relative path from the current .tf file location
+          const tfFileDir = dirname(join(workingDir, tfFile));
+          const resolvedPath = resolve(tfFileDir, sourcePath);
+
+          // Verify that the resolved path is within the workspace
+          const relativePath = relative(workingDir, resolvedPath);
+          if (!relativePath.startsWith('..') && existsSync(resolvedPath)) {
+            nestedModules[sourcePath] = relativePath;
+
+            // Recurse into the module sources
+            searchModuleFiles(relativePath);
+          }
+        }
+      } catch (error) {
+        console.warn(`Error reading file ${tfFile}:`, error);
+      }
+    }
+  };
+
+  searchModuleFiles(moduleDirectory);
+
+  return nestedModules;
+}
+
+/**
+ * Update the content of the current module that is in moduleDir, to ensure that local module
+ * declaration is using a relative path that is listed in the nestedModuleMap
+ *
+ * @param {Record<string, string>} nestedModuleMap - All nested modules, key is path to use and value the old value.
+ * @param {string} moduleDir - The module directory where to update files.
+ */
+export function updateNestedModuleSourcePaths(nestedModuleMap: Record<string, string>, moduleDir: string): void {
+  const tfFiles = glob.sync(`${moduleDir}/**/*.tf`, {
+    absolute: false,
+  });
+
+  for (const tfFile of tfFiles) {
+    try {
+      let updatedContent: string | null = null;
+      const content = readFileSync(tfFile, 'utf8');
+
+      // Regex to detect module blocks with local source paths
+      const moduleRegex = /module\s+"[^"]+"\s*\{[^}]*source\s*=\s*"(\.\/[^"]+|\.\.\/[^"]+)"/gs;
+      const matches = content.matchAll(moduleRegex);
+
+      for (const match of matches) {
+        const sourcePath = match[1];
+
+        if (sourcePath in nestedModuleMap) {
+          updatedContent = (updatedContent ?? content).replace(sourcePath, `./${nestedModuleMap[sourcePath]}`);
+        }
+
+        if (updatedContent) {
+          try {
+            writeFileSync(tfFile, updatedContent);
+          } catch (error) {}
+        }
+      }
+    } catch (error) {
+      console.warn(`Error reading file ${tfFile}:`, error);
+    }
+  }
+  return;
+}
+
+/**
  * Gets the relative path of the Terraform module directory associated with a specified file.
  *
  * Traverses upward from the file's directory to locate the nearest Terraform module directory.
@@ -130,14 +244,15 @@ export function findTerraformModuleDirectories(workspaceDir: string, modulePathI
  *                          if no directory is found.
  */
 export function getRelativeTerraformModulePathFromFilePath(filePath: string): string | null {
-  const rootDir = resolve(context.workingDir);
-  const absoluteFilePath = isAbsolute(filePath) ? filePath : resolve(context.workingDir, filePath); // Handle relative/absolute
+  const rootDir = resolve(context.workspaceDir);
+  const cwDir = resolve(context.workingDir);
+  const absoluteFilePath = isAbsolute(filePath) ? filePath : resolve(context.workspaceDir, filePath); // Handle relative/absolute
   let directory = dirname(absoluteFilePath);
 
   // Traverse upward until the current working directory (rootDir) is reached
   while (directory !== rootDir && directory !== resolve(directory, '..')) {
     if (isTerraformDirectory(directory)) {
-      return relative(rootDir, directory);
+      return relative(cwDir, directory);
     }
 
     directory = resolve(directory, '..'); // Move up a directory
@@ -189,7 +304,6 @@ export function copyModuleContents(
   baseDirectory?: string,
 ) {
   const baseDir = baseDirectory ?? directory;
-
   // Read the directory contents
   const filesToCopy = readdirSync(directory);
 
@@ -210,6 +324,43 @@ export function copyModuleContents(
     } else {
       info(`Excluding file: ${filePath}`);
     }
+  }
+}
+
+/**
+ * Copies the content of all nested modules to a temporary directory,
+ * excluding files that match specified patterns.
+ *
+ * @param {Record<string, string>} nestedModules - All nested modules that are required.
+ * @param {string} tmpDir - The temporary directory to copy to.
+ * @param {string} workingDir - The full path to current dir.
+ * @param {string[]} excludePatterns - An array of patterns to match against for exclusion.
+ * @param {string} [baseDirectory] - The base directory for exclusion pattern matching.
+ *                                    Defaults to the source directory if not provided.
+ */
+export function copyNestedModules(
+  nestedModules: Record<string, string>,
+  tmpDir: string,
+  workingDir: string,
+  excludePatterns: string[],
+  baseDirectory?: string,
+) {
+  for (const nestedModule of Object.values(nestedModules)) {
+    const destDir = join(tmpDir, nestedModule);
+    mkdirSync(destDir, { recursive: true });
+    copyModuleContents(join(workingDir, nestedModule), destDir, excludePatterns, baseDirectory);
+
+    // We create an updated nestedModule map where value is relative to main module
+    const updatedNestedModuleMap: Record<string, string> = Object.entries(nestedModules).reduce(
+      (acc, [key, value]) => {
+        const depth = nestedModule.split('/').filter(Boolean).length;
+        acc[key] = join(...Array(depth).fill('..'), value);
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+
+    updateNestedModuleSourcePaths(updatedNestedModuleMap, destDir);
   }
 }
 

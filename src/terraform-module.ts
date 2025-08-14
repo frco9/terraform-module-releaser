@@ -3,6 +3,7 @@ import { config } from '@/config';
 import { context } from '@/context';
 import type { CommitDetails, GitHubRelease, ReleaseReason, ReleaseType } from '@/types';
 import { MODULE_TAG_REGEX, RELEASE_REASON, RELEASE_TYPE, VERSION_TAG_REGEX } from '@/utils/constants';
+import { findModuleNestedModules } from '@/utils/file';
 import { removeTrailingCharacters } from '@/utils/string';
 import { endGroup, info, startGroup } from '@actions/core';
 
@@ -18,6 +19,11 @@ export class TerraformModule {
    * The Terraform module name used for tagging with some special characters removed.
    */
   public readonly name: string;
+
+  /**
+   * The Terraform module name used for tagging with some special characters removed.
+   */
+  public readonly nestedModules: Record<string, string>;
 
   /**
    * The full path to the directory where the module is located.
@@ -51,6 +57,8 @@ export class TerraformModule {
     const pathForModuleName = relativePath.startsWith('../') ? directory : relativePath;
 
     this.name = TerraformModule.getTerraformModuleNameFromRelativePath(pathForModuleName);
+
+    this.nestedModules = findModuleNestedModules(context.workingDir, directory);
   }
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

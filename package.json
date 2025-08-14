@@ -37,6 +37,7 @@
     "check": "biome check ./src",
     "check:fix": "biome check --write --unsafe .",
     "dev:parse-modules": "tsx scripts/dev-parse-modules.ts",
+    "dev:release-modules": "tsx scripts/dev-release-modules.ts",
     "textlint": "textlint -c .github/linters/.textlintrc **/*.md",
     "textlint:fix": "textlint -c .github/linters/.textlintrc --fix **/*.md",
     "typecheck": "tsc --noEmit",
